@@ -98,9 +98,9 @@
 - 触发 *0x80* 号中断。
 
 所以第一步我们需要做的就是添加对应的系统调用号让其能正确的保存在 *EAX* 寄存器种，通常调用编号的宏保存在 `include/unistd.h`中：
-![初始unistd](image\01.png)
+![初始unistd](image/01.png)
 从这个未修改的初始文件我们发现原来系统中一共有 *72* 种函数调用号(*0~71*)，下面的定义的函数宏是对 *OS内核* 中系统提供的代码的展开，我们的调用的系统库调用的函数经过不同种类的宏展开成为带有 `int 0x80` 中断的函数，并将系统调用号保存到指定的寄存器以便后续的使用。这里一共有四种函数宏 `_syscall0(int,close,int,fd) `, `_syscall1(type,name,atype,a)`, `_syscall2(type,name,atype,a,btype,b)`, `_syscall3(type,name,atype,a,btype,b,ctype,c)`在这里我们的`iam()`调用是需要有一个参数传入的故其应该展开为`_syscall1(int,iam,const char*,name)`同理`whoami()`应该展开为`_syscall2(int,whoami,char*,name,int,size)`。故我们需要添加系统调用,修改`include/unistd.h`文件:
-![修改unistd](image\02.png)
+![修改unistd](image/02.png)
 
 ### 三、添加内核函数索引
 如果我们仅单单添加了二者的宏我们仅能在用户态面上感受到他们的存在，这个系统调用能在用户态上正确的展开为我们希望的函数，但是通过 `int 0x80` 进入内核后我们无法通过我们定义的宏找到我们内核中对应的函数也就无法执行。那么我们就需要在内核中实现相应的函数，并需要加上一定的机制去实现内核对函数的定位。
@@ -177,12 +177,12 @@ fn_ptr sys_call_table[] = { sys_setup, sys_exit, sys_fork, sys_read,...}
 增加实验要求的系统调用，需要在这个函数表中增加两个函数引用 `sys_iam` 和 `sys_whoami`。当然该函数在 `sys_call_table` 数组中的位置必须和 `__NR_xxxxxx` 的值对应上。所以总结下来我们的修改就是：
 - 修改`kernel/system_call.s`的`nr_system_calls`。
 - 修改`include/linux/sys.h`的`sys_call_table`并增加额外的函数声明。
-![system_call](image\03.png)
-![sys](image\04.png)
+![system_call](image/03.png)
+![sys](image/04.png)
 在这里要注意，一定要注意`sys_iam`和`sys_whoami`的顺序一定要和自己定义的`__NR_iam`和`__NR_whoami`的顺序相同。
 
-不过在这里我们要补充说明，因为我们添加额外的函数文件所以我们必须要更改问哦们的`kernel/MakefileMakefile` 文件，我们需要向其添加我们新写的文件内容，修改前如图：![system_call](image\05.png)
-修改后：![sys](image\06.png)
+不过在这里我们要补充说明，因为我们添加额外的函数文件所以我们必须要更改问哦们的`kernel/MakefileMakefile` 文件，我们需要向其添加我们新写的文件内容，修改前如图：![system_call](image/05.png)
+修改后：![sys](image/06.png)
 - 第一处：
   ```nasm
   OBJS  = sched.o system_call.o traps.o asm.o fork.o \
@@ -338,7 +338,7 @@ int sys_whoami(char* name, unsigned int size)
 }
 ```
 在这里我要简短的补充一个小知识，`printk`函数就是内核态的 `printf` 函数，用它来帮助我们在内核态调试很方便，那我们能否用 `printf`来替代呢？很显然不能，因为在内核态中我们无法处理用户态的函数，我们的内核中没有`printf`这个函数。看似能用的 `strlen` 等字符串函数，实际上是**内核自己重新实现的版本**，并非用户态的标准库函数。Linux 内核在 `lib/string.c` 中提供了专门为内核环境优化的字符串处理函数，这些函数不依赖任何用户态库，针对内核内存管理进行优化而且确保在内核异常情况下的可靠性。
-![return](image\07.png)如果一切正常，我们会通过编译，如果出现了某些错误，请您仔细检查，但不要会心，错误至少证明了我们`Makefile`修改成功了。接下来让我们编写在`Linux 0.11`这个小系统编译的两个测试文件并上载到上面吧！
+![return](image/07.png)如果一切正常，我们会通过编译，如果出现了某些错误，请您仔细检查，但不要会心，错误至少证明了我们`Makefile`修改成功了。接下来让我们编写在`Linux 0.11`这个小系统编译的两个测试文件并上载到上面吧！
 - iam.c
   ```c
   #define __LIBRARY__   // 定义了这个宏，unistd.h中的一个条件编译块才会编译
@@ -378,4 +378,4 @@ $ vim iam.c
 $ vim whoami.c
 ```
 注意在`iam.c,whoami.c`程序内的头文件`<unistd.h>`是标准头文件，是由*GCC*编译器一同安装的，它们通常随着*GCC*一起打包并分发，通常位于`/usr/include`目录下，而不是在之前修过的源码树下的`include/unistd.h`, 因此我们要转入`hdc/usr/include`下修改`<unistd.h>`，加入两个宏`__NR_iam,__NR_whoami `编译。
-当我们修改完了之后再回退到`oslab`目录下执行`sudo umount hdc`取消系统盘的挂载，之后进入系统编译对应文件如果一切都没错误那么会出现：![final](image\08.png)至此，试验结束。
+当我们修改完了之后再回退到`oslab`目录下执行`sudo umount hdc`取消系统盘的挂载，之后进入系统编译对应文件如果一切都没错误那么会出现：![final](image/08.png)至此，试验结束。
